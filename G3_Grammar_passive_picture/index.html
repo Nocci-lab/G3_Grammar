@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>G3 Passive Picture Grammar</title>
+
+<style>
+body{
+  font-family:"Hiragino Maru Gothic ProN","Hiragino Maru Gothic",sans-serif;
+  background:#fdfefe;
+  text-align:center;
+}
+
+/* ===== 画面用 ===== */
+.card{
+  max-width:800px;
+  margin:20px auto;
+  padding:20px;
+  border:2px solid #ccc;
+  border-radius:16px;
+}
+img{
+  max-width:100%;
+  border-radius:12px;
+}
+.sentence{
+  font-size:26px;
+  margin:20px 0;
+}
+.choices button{
+  font-size:22px;
+  padding:10px 18px;
+  margin:6px;
+}
+.result{
+  font-size:24px;
+  margin:15px;
+}
+.correct{ color:green; }
+.wrong{ color:red; }
+.hidden{ display:none; }
+
+/* ===== PDF用 ===== */
+#printArea, #answerPage{
+  display:none;
+}
+
+/* PDF専用タイトル */
+#pdfTitle{
+  display:none;
+  font-size:22px;
+  font-weight:bold;
+  margin-bottom:20px;
+  text-align:left;
+}
+
+@media print{
+  body > *:not(#printArea):not(#answerPage){
+    display:none !important;
+  }
+
+  #printArea, #answerPage{
+    display:block;
+  }
+
+  #pdfTitle{
+    display:block;
+  }
+
+  .print-row{
+    display:flex;
+    align-items:center;
+    margin-bottom:24px;
+  }
+  .print-row img{
+    width:40%;
+    margin-right:20px;
+  }
+  .print-text{
+    width:60%;
+    font-size:18px;
+    text-align:left;
+  }
+
+  #answerPage{
+    page-break-before:always;
+    text-align:left;
+    font-size:18px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<h1>📘 Passive Picture Grammar</h1>
+
+<div class="card">
+  <img id="pic">
+  <div class="sentence" id="sentence"></div>
+  <div class="choices" id="choices"></div>
+  <div class="result" id="result"></div>
+
+  <button id="readBtn" class="hidden">🔊 Read</button>
+  <button id="nextBtn" class="hidden">Next ▶</button>
+</div>
+
+<button onclick="shuffleQuiz()">🔀 Shuffle</button>
+<button onclick="printPDF()">🖨 PDF</button>
+
+<!-- ===== PDF：問題 ===== -->
+<div id="printArea">
+
+  <!-- PDF専用タイトル -->
+  <div id="pdfTitle">
+    受け身文法で使う前置詞／絵で感覚をつかもう
+  </div>
+
+</div>
+
+<!-- ===== PDF：答え ===== -->
+<div id="answerPage">
+  <h2>答え</h2>
+  <ol id="answerList"></ol>
+</div>
+
+<script>
+const quiz = [
+  { img:"table_wood.png", text:"This table is made ( ___ ) wood.", answer:"of" },
+  { img:"milk_cheese.png", text:"Cheese is made ( ___ ) milk.", answer:"from" },
+  { img:"cookies_mother.png", text:"These cookies were made ( ___ ) my mother.", answer:"by" },
+  { img:"rice_asia.png", text:"Rice is eaten ( ___ ) many Asian countries.", answer:"in" },
+  { img:"spyfamily_world.png", text:"Spy x Family is known ( ___ ) many young people.", answer:"to" },
+  { img:"chopsticks_hashi.png", text:"Chopsticks are called hashi ( ___ ) Japanese.", answer:"in" },
+  { img:"yard_snow.png", text:"The yard was covered ( ___ ) snow.", answer:"with" }
+];
+
+const choices = ["by","from","in","of","with","to"];
+let index = 0;
+
+const pic = document.getElementById("pic");
+const sentence = document.getElementById("sentence");
+const choicesDiv = document.getElementById("choices");
+const result = document.getElementById("result");
+const readBtn = document.getElementById("readBtn");
+const nextBtn = document.getElementById("nextBtn");
+
+function loadQuiz(){
+  const q = quiz[index];
+  pic.src = q.img;
+  sentence.textContent = q.text;
+  result.textContent = "";
+  choicesDiv.innerHTML = "";
+  readBtn.classList.add("hidden");
+  nextBtn.classList.add("hidden");
+
+  choices.forEach(w=>{
+    const b=document.createElement("button");
+    b.textContent=w;
+    b.onclick=()=>selectWord(w);
+    choicesDiv.appendChild(b);
+  });
+}
+
+function selectWord(word){
+  const q = quiz[index];
+  sentence.innerHTML = q.text.replace("( ___ )", `( ${word} )`);
+  if(word===q.answer){
+    result.textContent="Correct!";
+    result.className="result correct";
+    readBtn.classList.remove("hidden");
+    nextBtn.classList.remove("hidden");
+  }else{
+    result.textContent="Try again!";
+    result.className="result wrong";
+  }
+}
+
+readBtn.onclick=()=>{
+  const q = quiz[index];
+  const u=new SpeechSynthesisUtterance(
+    q.text.replace("( ___ )", q.answer)
+  );
+  u.lang="en-US";
+  u.rate=0.7;
+  speechSynthesis.speak(u);
+};
+
+nextBtn.onclick=()=>{
+  index++;
+  if(index<quiz.length) loadQuiz();
+};
+
+function shuffleQuiz(){
+  quiz.sort(()=>Math.random()-0.5);
+  index=0;
+  loadQuiz();
+}
+
+/* ===== PDF（画像ロード待ち） ===== */
+function printPDF(){
+  const area=document.getElementById("printArea");
+  const answers=document.getElementById("answerList");
+  area.innerHTML=document.getElementById("pdfTitle").outerHTML;
+  answers.innerHTML="";
+
+  let loaded=0;
+  const total=quiz.length;
+
+  quiz.forEach(q=>{
+    const row=document.createElement("div");
+    row.className="print-row";
+
+    const img=document.createElement("img");
+    img.src=q.img;
+    img.onload=()=>{
+      loaded++;
+      if(loaded===total){
+        setTimeout(()=>window.print(),100);
+      }
+    };
+    row.appendChild(img);
+
+    const text=document.createElement("div");
+    text.className="print-text";
+    text.innerHTML=`
+      ${q.text.replace("( ___ )","(　　　　　　)")}<br>
+      by / from / in / of / with / to
+    `;
+    row.appendChild(text);
+
+    area.appendChild(row);
+
+    const li=document.createElement("li");
+    li.textContent=q.answer;
+    answers.appendChild(li);
+  });
+}
+
+loadQuiz();
+</script>
+
+</body>
+</html>

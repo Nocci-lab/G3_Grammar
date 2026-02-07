@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>英検3級 受け身 並べ替え</title>
+
+<style>
+body{
+  font-family:"Hiragino Maru Gothic ProN","Hiragino Maru Gothic",sans-serif;
+  background:#f6f6f6;
+  padding:16px;
+}
+h1{
+  text-align:center;
+  font-size:20px;
+  margin-bottom:20px;
+}
+.question{
+  background:#fff;
+  padding:16px;
+  margin-bottom:24px;
+  border-radius:14px;
+  border:3px solid transparent;
+}
+.question.wrong{
+  border-color:#e74c3c;
+  background:#fff0f0;
+}
+.jp{
+  font-size:14px;
+  margin-bottom:6px;
+}
+
+/* PDF専用 */
+.print-only{ display:none; }
+.lines{ margin-top:8px; }
+.line{
+  border-bottom:1.8px solid #333;
+  height:22px;
+  margin-bottom:6px;
+}
+
+/* カード */
+.card-pool, .slots{ display:flex; flex-wrap:wrap; gap:10px; }
+.card-pool{
+  padding:12px;
+  border:2px dashed #bbb;
+  border-radius:12px;
+  background:#fafafa;
+  margin-bottom:12px;
+}
+.slots{
+  padding:12px;
+  border:2px dashed #bbb;
+  border-radius:12px;
+  background:#eef6ff;
+}
+.slot{
+  width:70px;
+  height:42px;
+  border:2px dashed #ccc;
+  border-radius:8px;
+}
+.card{
+  min-width:60px;
+  height:40px;
+  padding:0 10px;
+  border:2px solid #999;
+  border-radius:10px;
+  background:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:15px;
+  cursor:pointer;
+  user-select:none;
+  white-space:nowrap;
+}
+
+/* ボタン */
+.controls{ text-align:center; margin:20px 0; }
+button{ font-size:15px; padding:6px 12px; margin:4px; }
+.speak-btn{ display:none; }
+
+/* 紙吹雪 */
+canvas{ position:fixed; top:0; left:0; pointer-events:none; }
+
+/* ===== 答えページ ===== */
+.answer-page{ display:none; }
+
+/* ===== PDF ===== */
+@media print{
+  @page{ size:A4 portrait; margin:12mm; }
+  body{ background:white; font-size:12px; }
+  button, .card-pool, .slots, canvas{ display:none; }
+  .print-only{ display:block; }
+  .question{ page-break-inside:avoid; }
+
+  .answer-page{
+    display:block;
+    page-break-before:always;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<h1>英検3級 受け身 並べ替え</h1>
+
+<div id="game"></div>
+
+<div class="controls">
+  <button onclick="shuffleAll()">🔀 シャッフル</button>
+  <button onclick="checkAll()">✔ 丸つけ</button>
+  <button onclick="window.print()">🖨 PDF</button>
+</div>
+
+<!-- PDF用：答えページ -->
+<div class="answer-page">
+  <h1>答え</h1>
+  <ol id="answerList"></ol>
+</div>
+
+<canvas id="confetti"></canvas>
+
+<script>
+const QUESTIONS = [
+ {jp:"海藻は多くの国で食べられていません。", en:["Seaweed","is","not","eaten","in","many","countries","."]},
+ {jp:"米は多くの国で食べられていますか？", en:["Is","rice","eaten","in","many","countries","?"]},
+ {jp:"そのトイレは昨日掃除されませんでした。", en:["The","restroom","was","not","cleaned","yesterday","."]},
+ {jp:"これらの花はあなたの庭で育てられましたか？", en:["Were","these","flowers","grown","in","your","garden","?"]},
+ {jp:"ワインはぶどうから作られていますか？", en:["Is","wine","made","from","grapes","?"]},
+ {jp:"なぜその少年は泥だらけだったのですか？", en:["Why","was","the","boy","covered","with","mud","?"]},
+ {jp:"これらのクッキーはイタリアで作られませんでした。", en:["These","cookies","were","not","made","in","Italy","."]},
+ {jp:"これらのクッキーはどこで作られましたか？", en:["Where","were","these","cookies","made","?"]}
+];
+
+const game=document.getElementById("game");
+const answerList=document.getElementById("answerList");
+const confetti=document.getElementById("confetti");
+
+let instances=[];
+let currentOrder=[];
+let anim=null;
+
+function shuffle(arr){
+  return arr.slice().sort(()=>Math.random()-0.5);
+}
+function strongShuffle(arr){
+  let s;
+  do{ s=shuffle(arr); }while(s.join("")===arr.join(""));
+  return s;
+}
+
+function shuffleAll(){
+  stopConfetti();
+  game.innerHTML="";
+  answerList.innerHTML="";
+  instances=[];
+
+  currentOrder = shuffle(QUESTIONS);
+
+  currentOrder.forEach(q=>{
+    const shuffledWords = strongShuffle(q.en);
+    const box=document.createElement("div");
+    box.className="question";
+    box.innerHTML=`
+      <div class="jp">${q.jp}</div>
+
+      <div class="print-only">
+        <div>${shuffledWords.join(" / ")}</div>
+        <div class="lines"><div class="line"></div></div>
+      </div>
+
+      <div class="card-pool"></div>
+      <div class="slots"></div>
+    `;
+    game.appendChild(box);
+
+    const pool=box.querySelector(".card-pool");
+    const slots=box.querySelector(".slots");
+
+    q.en.forEach(()=>slots.appendChild(document.createElement("div")).className="slot");
+
+    shuffledWords.forEach(w=>{
+      const c=document.createElement("div");
+      c.className="card";
+      c.textContent=w;
+      pool.appendChild(c);
+      c.onclick=()=>{
+        if(c.parentElement===pool){
+          const e=[...slots.children].find(s=>!s.firstChild);
+          if(e) e.appendChild(c);
+        }else{
+          pool.appendChild(c);
+        }
+      };
+    });
+
+    instances.push({box,slots,answer:q.en.join(" ")});
+
+    /* 答えページ用 */
+    const li=document.createElement("li");
+    li.textContent=q.en.join(" ");
+    answerList.appendChild(li);
+  });
+}
+
+function checkAll(){
+  let ok=true;
+  instances.forEach(i=>{
+    const text=[...i.slots.children].map(s=>s.firstChild?s.firstChild.textContent:"").join(" ");
+    if(text!==i.answer){
+      i.box.classList.add("wrong");
+      ok=false;
+    }else{
+      i.box.classList.remove("wrong");
+    }
+  });
+  if(ok) startConfetti();
+}
+
+/* 紙吹雪 */
+function startConfetti(){
+  stopConfetti();
+  const ctx=confetti.getContext("2d");
+  confetti.width=innerWidth;
+  confetti.height=innerHeight;
+  const p=[...Array(120)].map(()=>({x:Math.random()*innerWidth,y:Math.random()*innerHeight,r:4,c:`hsl(${Math.random()*360},100%,50%)`}));
+  function draw(){
+    ctx.clearRect(0,0,innerWidth,innerHeight);
+    p.forEach(o=>{ctx.fillStyle=o.c;ctx.beginPath();ctx.arc(o.x,o.y,o.r,0,Math.PI*2);ctx.fill();o.y+=2;});
+    anim=requestAnimationFrame(draw);
+  }
+  draw();
+  setTimeout(stopConfetti,5000);
+}
+function stopConfetti(){
+  if(anim){cancelAnimationFrame(anim);anim=null;}
+  confetti.getContext("2d").clearRect(0,0,innerWidth,innerHeight);
+}
+
+/* 初期表示 */
+shuffleAll();
+</script>
+
+</body>
+</html>
